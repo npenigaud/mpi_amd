@@ -1,7 +1,7 @@
 #!/bin/bash
 ##SBATCH -N2
 #SBATCH -N1
-#SBATCH --time 00:01:00
+#SBATCH --time 00:05:00
 #SBATCH --export="NONE"
 #SBATCH --partition MI300X
 ##SBATCH --gres=gpu:1
