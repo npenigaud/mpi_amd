@@ -6,4 +6,4 @@ module unload -f openmpi-rt/ucx
 module load openmpi-rt/sm
 
 
-mpif90 -march=native -fPIC -ffree-form -cpp -fbackslash -fconvert=big-endian -O2 -ffp-contract=off -DARCH="'afar221ompd'" -fopenmp -fPIC -fopenmp --offload-arch=gfx942 -Qunused-arguments  mpc.F90 -o mpc.x 
+mpif90 -g -march=native -fPIC -ffree-form -cpp -fbackslash -fconvert=big-endian -O2 -ffp-contract=off -DARCH="'afar221ompd'" -fopenmp -fPIC -fopenmp --offload-arch=gfx942 -Qunused-arguments  mpc.F90 -o mpc.x 

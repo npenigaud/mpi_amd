@@ -2,6 +2,7 @@ PROGRAM MPICUDAAWARE
 
 USE MPI
 USE OMP_LIB
+USE ISO_C_BINDING, ONLY : C_PTR, C_SIZE_T, C_INT, C_F_POINTER, C_SIZEOF
  
 IMPLICIT NONE
 
@@ -11,9 +12,10 @@ REAL, ALLOCATABLE         :: C_SEND (:), C_RECV (:)
 
 
 !REAL, ALLOCATABLE, DEVICE :: D_SEND (:), D_RECV (:)
-REAL, ALLOCATABLE :: D_SEND (:), D_RECV (:)
-
-
+REAL, POINTER :: D_SEND (:), D_RECV (:)
+TYPE(C_PTR) :: D_SEND_PTR, D_RECV_PTR
+INTEGER(C_SIZE_T) :: ICSIZE
+INTEGER(C_INT)    :: DEV
 
 REAL, ALLOCATABLE         :: H_SEND (:), H_RECV (:)
 REAL, ALLOCATABLE         :: dummy1(:), dummy2(:)
@@ -33,34 +35,48 @@ NUM_GPUS=OMP_GET_NUM_DEVICES()
 NUM_CARTE=MODULO(IRANK,NUM_GPUS)
 CALL OMP_SET_DEFAULT_DEVICE(NUM_CARTE)
 
-
+DEV=NUM_CARTE
 
 
 PRINT *, "Rank ",IRANK ," running on GPU number ",OMP_GET_DEFAULT_DEVICE()
 
 ALLOCATE (C_SEND (ISIZEDATA))
 ALLOCATE (C_RECV (ISIZEDATA))
-ALLOCATE (D_RECV (ISIZEDATA))
-ALLOCATE (D_SEND (ISIZEDATA))
+!ALLOCATE (D_RECV (ISIZEDATA))
+!ALLOCATE (D_SEND (ISIZEDATA))
 ALLOCATE (H_RECV (ISIZEDATA))
 ALLOCATE (H_SEND (ISIZEDATA))
 allocate (dummy1(ISIZEDATA),dummy2(ISIZEDATA))
 
+ICSIZE=C_SIZEOF(H_RECV(1))*ISIZEDATA
+D_SEND_PTR=OMP_TARGET_ALLOC(ICSIZE,DEV)
+D_RECV_PTR=OMP_TARGET_ALLOC(ICSIZE,DEV)
+CALL C_F_POINTER(D_SEND_PTR,D_SEND,[ISIZEDATA])
+CALL C_F_POINTER(D_RECV_PTR,D_RECV,[ISIZEDATA])
+write (0,*) "shape(d_send)",shape(d_send)
+write (0,*) "d_send(1)",d_send(1)
 CALL RANDOM_NUMBER (C_SEND)
 CALL RANDOM_NUMBER (H_SEND)
 call random_number (dummy1)
 call random_number (dummy2)
 !$omp target data map(tofrom:dummy1,dummy2)
 
-print *, "c_send", C_SEND(1:10)
-print *, "h_send", H_SEND(1:10)
 
 do compteur=1,ISIZEDATA
   C_SEND(compteur) = C_SEND(compteur)+1.0
   C_RECV(compteur) = -1.0
 enddo
-D_SEND=C_SEND
-D_RECV=C_RECV
+
+print *, "c_send", C_SEND(1:10)
+print *, "h_send", H_SEND(1:10)
+
+
+!$omp target data map(tofrom: c_send,c_recv) 
+!$omp target 
+D_SEND(:)=C_SEND(:)
+D_RECV(:)=C_RECV(:)
+!$omp end target
+!$omp end target data
 
 IRANKP = MODULO (IRANK-1, ISIZE)
 IRANKN = MODULO (IRANK+1, ISIZE)
@@ -76,7 +92,6 @@ PRINT *, " DEVICE DATA "
 CALL MPI_IRECV (D_RECV, ISIZEDATA,mpi_real, IRANKP, 1001, MPI_COMM_WORLD, IREQ_RECV, &
              & ierror_r)
 
-CALL MPI_BARRIER (MPI_COMM_WORLD,ierror_b)
 
 CALL MPI_ISEND (D_SEND, ISIZEDATA,mpi_real,IRANKN, 1001, MPI_COMM_WORLD, IREQ_SEND, &
              & ierror_s)
@@ -90,11 +105,24 @@ do compteur=1,ISIZEDATA
 enddo
 !$omp end target
 
+write (0,*) "reçu => "
+!$omp target 
+do compteur=1,10
+  write (0,*) d_recv(compteur)
+enddo
+!$omp end target
 
-C_SEND=D_SEND
-C_RECV=D_RECV
-PRINT *, IRANK, " reçu ==> ", C_RECV (1:10)
-PRINT *, IRANK, " envoyé ==> ", C_SEND(1:10)
+write (0,*) "envoyé => "
+!$omp target 
+do compteur=1,10
+  write (0,*) d_send(compteur)
+enddo
+!$omp end target
+
+!C_SEND=D_SEND
+!C_RECV=D_RECV
+!PRINT *, IRANK, " reçu ==> ", C_RECV (1:10)
+!PRINT *, IRANK, " envoyé ==> ", C_SEND(1:10)
 
 !$omp target
 do compteur=1,ISIZEDATA
@@ -115,12 +143,14 @@ enddo
 !$omp end target
 
 
+CALL MPI_BARRIER (MPI_COMM_WORLD,ierror_b)
+
+
 PRINT *, " HOST DATA "
 
 CALL MPI_IRECV (H_RECV,ISIZEDATA, mpi_real, IRANKP, 1001, MPI_COMM_WORLD, IREQ_RECV, &
              & ierror_r)
 
-CALL MPI_BARRIER (MPI_COMM_WORLD,ierror_b)
 
 CALL MPI_ISEND (H_SEND, ISIZEDATA, mpi_real, IRANKN, 1001, MPI_COMM_WORLD, IREQ_SEND, &
              & ierror_s)
@@ -151,13 +181,13 @@ do compteur=1,ISIZEDATA
 enddo
 !$omp end target
 
+CALL MPI_BARRIER (MPI_COMM_WORLD,ierror_b)
 
 PRINT *, "HOST DATA UPDATE"
 
 CALL MPI_IRECV (H_RECV,ISIZEDATA, mpi_real, IRANKP, 1001, MPI_COMM_WORLD, IREQ_RECV, &
              & ierror_r)
 
-CALL MPI_BARRIER (MPI_COMM_WORLD,ierror_b)
 
 !$omp target update from(h_send)   !!!updates data to host before using MPI
 CALL MPI_ISEND (H_SEND,ISIZEDATA, mpi_real,IRANKN, 1001, MPI_COMM_WORLD,IREQ_SEND, &
@@ -196,6 +226,7 @@ do compteur=1,ISIZEDATA
 enddo
 !$omp end target
 
+CALL MPI_BARRIER (MPI_COMM_WORLD,ierror_b)
 
 PRINT *, " HOST DATA (USE_DEVICE) "
 
@@ -204,7 +235,6 @@ CALL MPI_IRECV (H_RECV, ISIZEDATA,mpi_real,IRANKP, 1001, MPI_COMM_WORLD, IREQ_RE
              & ierror_r)
 !$OMP END TARGET DATA
 
-CALL MPI_BARRIER (MPI_COMM_WORLD,ierror_b)
 
 !$OMP TARGET DATA USE_DEVICE_ADDR (H_SEND)
 CALL MPI_ISEND (H_SEND, ISIZEDATA, mpi_real,IRANKN, 1001, MPI_COMM_WORLD, IREQ_SEND, &
@@ -227,10 +257,13 @@ enddo
 PRINT *, IRANK, " received  ==> ", H_RECV (1:10)
 PRINT *, IRANK, " sent ==> ", H_SEND(1:10)
 
+CALL MPI_BARRIER (MPI_COMM_WORLD,ierror_b)
+
+
 DEALLOCATE (C_SEND)
 DEALLOCATE (C_RECV)
-DEALLOCATE (D_SEND)
-DEALLOCATE (D_RECV)
+!DEALLOCATE (D_SEND)
+!DEALLOCATE (D_RECV)
 DEALLOCATE (H_SEND)
 DEALLOCATE (H_RECV)
 
