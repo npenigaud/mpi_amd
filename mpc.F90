@@ -1,8 +1,7 @@
 PROGRAM MPIGPUAWARE
 
-USE HIPFORT
-USE ISO_C_BINDING
 USE MPI
+USE OMP_LIB
  
 IMPLICIT NONE
 
@@ -13,18 +12,20 @@ INTEGER :: ISTATUS (MPI_STATUS_SIZE)
 INTEGER :: ISIZE, IERROR_R,IERROR_S,IERROR_B,IERROR
 INTEGER :: IRANK, IRANKP, IRANKN
 INTEGER, PARAMETER :: ISIZEDATA=16
-INTEGER     :: COMPTEUR
-INTEGER(C_INT)::NUM_CARTE,FLAGS
+INTEGER     :: COMPTEUR,NUM_GPUS,NUM_CARTE
 
 CALL MPI_INIT (ierror)
 
 CALL MPI_COMM_RANK (MPI_COMM_WORLD, IRANK, IERROR)
 CALL MPI_COMM_SIZE (MPI_COMM_WORLD, ISIZE, IERROR)
+NUM_GPUS=OMP_GET_NUM_DEVICES()
+num_carte=MODULO(IRANK,NUM_GPUS)
+call omp_set_default_device(num_carte)
 
-write (0,*) "using hipInit, result : ", hipInit(flags)
-write (0,*) "using hipSetDevice, result : ", hipSetDevice(IRANK)
-write (0,*) "using hipGetDevice, result : ", hipGetDevice(NUM_CARTE)
-print *, "Rank ",IRANK ," running on GPU number ",num_carte
+!!print *, "irank num_gpu num_carte",irank,num_gpus,num_carte
+!!call omp_set_default_device(num_carte)
+print *, "Rank ",irank," device number :",omp_get_default_device()
+!!print *, "Rank ",IRANK ," running on GPU number ",num_carte
 
 ALLOCATE (H_RECV (ISIZEDATA))
 ALLOCATE (H_SEND (ISIZEDATA))
@@ -36,14 +37,20 @@ PRINT *, "Rank",irank," valeur initialisation h_send" , H_SEND(1:10)
 IRANKP = MODULO (IRANK-1, ISIZE)
 IRANKN = MODULO (IRANK+1, ISIZE)
 
+
+
+!$omp target data map (tofrom:H_RECV, H_SEND) 
+!$omp target 
 do COMPTEUR=1,ISIZEDATA
   H_SEND(COMPTEUR) = H_SEND(COMPTEUR)+irank
   H_RECV(COMPTEUR) = -1.0
 enddo
+!$omp end target 
+
+!$omp target update from (h_send)
 
 PRINT *, "Rank",irank," valeur apres ajout rank h_send",H_SEND(1:10)
 
-!$omp target data map (tofrom:H_RECV, H_SEND)
 
 PRINT *, " HOST DATA (USE_DEVICE) "
 
@@ -52,7 +59,7 @@ CALL MPI_IRECV (H_RECV,ISIZEDATA,MPI_REAL,IRANKP, 1001, MPI_COMM_WORLD, IREQ_REC
              & IERROR_R)
 !$OMP END TARGET DATA
 
-CALL MPI_BARRIER (MPI_COMM_WORLD,IERROR_B)
+!CALL MPI_BARRIER (MPI_COMM_WORLD,IERROR_B)
 
 !$OMP TARGET DATA USE_DEVICE_ADDR (H_SEND)
 CALL MPI_ISEND (H_SEND,ISIZEDATA,MPI_REAL,IRANKN, 1001, MPI_COMM_WORLD, IREQ_SEND, &
