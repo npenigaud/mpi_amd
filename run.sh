@@ -5,7 +5,7 @@
 #SBATCH --export="NONE"
 #SBATCH --partition MI300X
 #SBATCH --gres=gpu:2
-#SBATCH -n 8
+#SBATCH -n 2
 
 source /home/afar/modules/use.sh
 module load rocm/7.1.1
@@ -33,8 +33,5 @@ export OMP_STACK_SIZE=16G
 ulimit -s unlimited
 export OMP_STACK_SIZE=16G
 
-#ldd -v $(which mpirun)
-
-#/home/afar/software/mpi/openmpi/afar-22.3.0/5.0.9_ucx1.20.0_rocm7.1.1/bin/mpirun -np 2 /home/afar/software/compilers/afar/rocm-afar-8873-drop-22.2.0/bin/rocprofv3 --runtime-trace --output-format=pftrace -- /home/penigaudn/castest/mpi_issue/mpc.x
-/home/afar/software/compilers/afar/rocm-afar-8873-drop-22.2.0/bin/rocprofv3 --runtime-trace --output-format=pftrace -- /home/afar/software/mpi/openmpi/afar-22.3.0/5.0.9_ucx1.20.0_rocm7.1.1/bin/mpirun --report-bindings -np 2 /home/penigaudn/castest/mpi_issue/mpc.x
+/home/afar/software/compilers/afar/rocm-afar-8873-drop-22.2.0/bin/rocprofv3 --runtime-trace --output-format=pftrace -- /home/afar/software/mpi/openmpi/afar-22.3.0/5.0.9_ucx1.20.0_rocm7.1.1/bin/mpirun --report-bindings -np 2 mpc.x
 
