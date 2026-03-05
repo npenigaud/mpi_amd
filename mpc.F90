@@ -21,7 +21,8 @@ CALL MPI_INIT (ierror)
 CALL MPI_COMM_RANK (MPI_COMM_WORLD, IRANK, IERROR)
 CALL MPI_COMM_SIZE (MPI_COMM_WORLD, ISIZE, IERROR)
 
-write (0,*) "using hipInit, result : ", hipInit(flags)
+!flags=0
+!write (0,*) "using hipInit, result : ", hipInit(flags)
 write (0,*) "using hipSetDevice, result : ", hipSetDevice(IRANK)
 write (0,*) "using hipGetDevice, result : ", hipGetDevice(NUM_CARTE)
 print *, "Rank ",IRANK ," running on GPU number ",num_carte
@@ -75,7 +76,6 @@ PRINT *, "IERROR_S",IERROR_S,"IERROR_R",IERROR_R,"IERROR_B",IERROR_B
 CALL MPI_BARRIER (MPI_COMM_WORLD,ierror)
 
 PRINT *, "FINALIZE"
-
 
 CALL MPI_FINALIZE(ierror)
 

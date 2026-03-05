@@ -24,6 +24,6 @@ module load openmpi-rt/sm
 set -x
 
 ulimit -s unlimited
-export OMP_STACK_SIZE=16G
+export OMP_STACKSIZE=16G
 
-mpirun -n 2 --oversubscribe ./mpc.x
+mpirun -n 2 --report-bindings ./mpc.x
